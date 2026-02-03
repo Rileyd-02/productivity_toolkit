@@ -8,7 +8,15 @@ st.set_page_config(page_title="Productivity AI Toolkit", layout="wide")
 st.title(" Productivity AI Toolkit")
 st.markdown("AI tools to evaluate ideas, reduce unnecessary meetings, and identify automation opportunities.")
 
+import streamlit as st
+from openai import OpenAI
+
+if "OPENAI_API_KEY" not in st.secrets:
+    st.error("❌ API key not found. Please add OPENAI_API_KEY in Streamlit Cloud Secrets.")
+    st.stop()
+
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
 
 # ============ SESSION AI LIMIT ============
 if "ai_calls" not in st.session_state:
@@ -160,3 +168,4 @@ with tabs[2]:
 # ================= FOOTER =================
 st.markdown("---")
 st.caption("Built with Streamlit + OpenAI | MAS Productivity AI Toolkit")
+
