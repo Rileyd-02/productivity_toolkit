@@ -56,7 +56,7 @@ def save_history(entry):
     st.session_state.history.append(entry)
 
 # ================= TABS =================
-tabs = st.tabs(["🔁 Work Automation Finder","💡 Idea Evaluator", "📅 Meeting Checker", "📊 Productivity Dashboard"])
+tabs = st.tabs(["💡 Idea Evaluator", "📅 Meeting Checker","🔁 Work Automation Finder", "📊 Productivity Dashboard"])
 
 # ================= IDEA EVALUATOR =================
 with tabs[0]:
@@ -190,4 +190,5 @@ with tabs[3]:
 # ================= FOOTER =================
 st.markdown("---")
 st.caption("Powered by Digitalization@Intimates | MAS Productivity AI Toolkit")
+
 
