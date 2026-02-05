@@ -3,20 +3,22 @@ import pandas as pd
 import plotly.graph_objects as go
 from openai import OpenAI
 
-# ================= CONFIG =================
+# ================= PAGE CONFIG =================
 st.set_page_config(page_title="Productivity AI Toolkit", layout="wide")
 st.title(" Productivity AI Toolkit")
 st.markdown("AI tools to evaluate ideas, reduce unnecessary meetings, and identify automation opportunities.")
 
-import streamlit as st
-from openai import OpenAI
-
-if "OPENAI_API_KEY" not in st.secrets:
-    st.error("❌ API key not found. Please add OPENAI_API_KEY in Streamlit Cloud Secrets.")
+# ================= OPENROUTER CLIENT =================
+if "OPENROUTER_API_KEY" not in st.secrets:
+    st.error("❌ OPENROUTER_API_KEY not found in Streamlit secrets.")
     st.stop()
 
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+client = OpenAI(
+    api_key=st.secrets["OPENROUTER_API_KEY"],
+    base_url="https://openrouter.ai/api/v1"
+)
 
+MODEL = "openai/gpt-4o-mini"
 
 # ============ SESSION AI LIMIT ============
 if "ai_calls" not in st.session_state:
@@ -31,10 +33,21 @@ def can_use_ai():
     st.session_state.ai_calls += 1
     return True
 
+def ask_ai(prompt):
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": prompt}],
+        extra_headers={
+            "HTTP-Referer": "https://your-app-name.streamlit.app",
+            "X-Title": "Corporate Productivity Toolkit"
+        }
+    )
+    return response.choices[0].message.content
+
 # ================= TABS =================
 tabs = st.tabs(["💡 Idea Evaluator", "📅 Meeting Checker", "🔁 Work Automation Finder"])
 
-#  IDEA EVALUATOR
+# IDEA EVALUATOR
 
 with tabs[0]:
     st.header("💡 AI Idea Evaluator")
@@ -52,39 +65,27 @@ with tabs[0]:
     if st.button("Evaluate Idea"):
         if can_use_ai():
             prompt = f"""
-            Evaluate this business idea.
+Evaluate this business idea:
 
-            Idea: {idea_name}
-            Problem: {problem}
-            Users: {users}
-            Benefits: {benefits}
-            Effort: {effort}
-            Risks/Dependencies: {dependencies}
+Idea: {idea_name}
+Problem: {problem}
+Users: {users}
+Benefits: {benefits}
+Effort: {effort}
+Risks: {dependencies}
 
-            Score from 1-10 for:
-            - Business Impact
-            - Clarity
-            - Risk Level
-            - Effort Level
-
-            Then provide:
-            1. Overall Recommendation (GO / REWORK / NOT WORTH IT)
-            2. Short reasoning
-            3. 2 improvement suggestions
-            """
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            result = response.choices[0].message.content
-
+Provide:
+1. Scores (1-10) for Impact, Clarity, Risk, Effort
+2. Overall Recommendation (GO / REWORK / NOT WORTH IT)
+3. Reasoning
+4. Two improvement suggestions
+"""
+            result = ask_ai(prompt)
             with col2:
                 st.subheader("📊 AI Evaluation")
                 st.write(result)
 
-#  MEETING CHECKER
+# MEETING CHECKER
 
 with tabs[1]:
     st.header("📅 Meeting Necessity Checker")
@@ -98,35 +99,29 @@ with tabs[1]:
     if st.button("Evaluate Meeting"):
         if can_use_ai():
             prompt = f"""
-            Determine if this meeting is necessary.
+Should this meeting happen?
 
-            Topic: {topic}
-            Objective: {objective}
-            Decisions Needed: {decisions}
-            Number of Attendees: {attendees}
-            Urgency: {urgency}
+Topic: {topic}
+Objective: {objective}
+Decisions Needed: {decisions}
+Attendees: {attendees}
+Urgency: {urgency}
 
-            Provide:
-            1. Verdict (Meeting Needed / Send Email Instead / Reduce Scope)
-            2. Suggested Duration
-            3. Suggested Attendee Roles
-            4. Simple Agenda
-            """
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}]
-            )
-
+Provide:
+1. Verdict (Meeting Needed / Send Email Instead / Reduce Scope)
+2. Suggested Duration
+3. Suggested Attendee Roles
+4. Simple Agenda
+"""
+            result = ask_ai(prompt)
             st.subheader("🧠 AI Meeting Verdict")
-            st.write(response.choices[0].message.content)
+            st.write(result)
 
 #  WORK AUTOMATION FINDER
 
 with tabs[2]:
     st.header("🔁 Repetitive Work Identifier")
-
-    st.write("List tasks you repeatedly do each week:")
+    st.write("List recurring tasks you perform each week:")
 
     df = st.data_editor(pd.DataFrame({
         "Task": ["Updating weekly Excel report", "Copying data from emails"],
@@ -146,26 +141,20 @@ with tabs[2]:
             task_summary = df.to_string()
 
             prompt = f"""
-            These are recurring work tasks:
+These are recurring work tasks:
 
-            {task_summary}
+{task_summary}
 
-            Identify:
-            1. Which tasks can be automated
-            2. Suggested tools (RPA, Python, Power Automate, Dashboards, etc.)
-            3. Estimated difficulty (Easy/Medium/Hard)
-            4. Potential time savings
-            """
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}]
-            )
-
+Identify:
+1. Tasks suitable for automation
+2. Suggested tools (RPA, Python, Power Automate, dashboards, etc.)
+3. Automation difficulty (Easy/Medium/Hard)
+4. Potential monthly time savings
+"""
+            result = ask_ai(prompt)
             st.subheader("🤖 AI Automation Opportunities")
-            st.write(response.choices[0].message.content)
+            st.write(result)
 
 # ================= FOOTER =================
 st.markdown("---")
-st.caption("Built with Streamlit + OpenAI | MAS Productivity AI Toolkit")
-
+st.caption("Powered by Digitalization@Intimates | MAS Productivity AI Toolkit")
