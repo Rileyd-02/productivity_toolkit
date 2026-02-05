@@ -24,7 +24,7 @@ client = OpenAI(
 
 MODEL = "openai/gpt-4o-mini"
 
-# ============ SESSION STATE ============
+# ================= SESSION STATE =================
 if "ai_calls" not in st.session_state:
     st.session_state.ai_calls = 0
 
@@ -55,9 +55,19 @@ def ask_ai(prompt):
     return response.choices[0].message.content
 
 def save_history(entry):
-    st.session_state.history.append(entry)
+    # Ensure all records have same keys to prevent dashboard errors
+    default_entry = {
+        "type": "",
+        "name": "",
+        "result": "",
+        "time": datetime.now(),
+        "hours": 0,
+        "savings": 0
+    }
+    default_entry.update(entry)
+    st.session_state.history.append(default_entry)
 
-# ================= TABS (REORDERED) =================
+# ================= TABS =================
 tabs = st.tabs([
     "🔁 Work Automation Finder",
     "💡 Idea Evaluator",
@@ -66,11 +76,10 @@ tabs = st.tabs([
 ])
 
 # =====================================================
-# 🔁 WORK AUTOMATION FINDER (NOW FIRST + ROI)
+# 🔁 WORK AUTOMATION FINDER + ROI
 # =====================================================
 with tabs[0]:
     st.header("🔁 Repetitive Work & Automation ROI Calculator")
-    st.write("List recurring manual tasks to discover automation and cost savings.")
 
     df = st.data_editor(pd.DataFrame({
         "Task": ["Updating weekly Excel report", "Copying data from emails"],
@@ -89,7 +98,6 @@ with tabs[0]:
         total_hours = df["Monthly Hours"].sum()
         annual_hours = total_hours * 12
 
-        monthly_savings = total_hours * hourly_rate
         annual_savings = annual_hours * hourly_rate
         roi = ((annual_savings - automation_cost) / automation_cost) * 100 if automation_cost else 0
 
@@ -123,7 +131,6 @@ Suggest:
                 "type": "Automation",
                 "name": "Task Analysis",
                 "result": result,
-                "time": datetime.now(),
                 "hours": total_hours,
                 "savings": annual_savings
             })
@@ -158,7 +165,12 @@ Risks: {dependencies}
             result = ask_ai(prompt)
             with col2:
                 st.write(result)
-                save_history({"type": "Idea", "name": idea_name, "result": result, "time": datetime.now()})
+
+            save_history({
+                "type": "Idea",
+                "name": idea_name,
+                "result": result
+            })
 
 # =====================================================
 # 📅 MEETING CHECKER
@@ -185,10 +197,15 @@ Urgency: {urgency}
 """
             result = ask_ai(prompt)
             st.write(result)
-            save_history({"type": "Meeting", "name": topic, "result": result, "time": datetime.now()})
+
+            save_history({
+                "type": "Meeting",
+                "name": topic,
+                "result": result
+            })
 
 # =====================================================
-# 📊 DASHBOARD (NOW SHOWS SAVINGS)
+# 📊 PRODUCTIVITY DASHBOARD (FIXED)
 # =====================================================
 with tabs[3]:
     st.header("📊 Productivity Impact Dashboard")
@@ -200,8 +217,8 @@ with tabs[3]:
         st.metric("Ideas Reviewed", len(hist_df[hist_df["type"] == "Idea"]))
         st.metric("Meetings Checked", len(hist_df[hist_df["type"] == "Meeting"]))
 
-        auto_hours = hist_df[hist_df["type"] == "Automation"]["hours"].sum()
-        auto_savings = hist_df[hist_df["type"] == "Automation"]["savings"].sum()
+        auto_hours = hist_df.loc[hist_df["type"] == "Automation", "hours"].sum()
+        auto_savings = hist_df.loc[hist_df["type"] == "Automation", "savings"].sum()
 
         st.metric("Repetitive Hours Identified", f"{auto_hours:.1f} hrs/month")
         st.metric("Total Annual Savings Identified", f"${auto_savings:,.0f}")
