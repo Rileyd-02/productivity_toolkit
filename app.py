@@ -2,11 +2,15 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from openai import OpenAI
+from datetime import datetime
 
 # ================= PAGE CONFIG =================
 st.set_page_config(page_title="Productivity AI Toolkit", layout="wide")
-st.title(" Productivity AI Toolkit")
+st.title("🚀 Productivity AI Toolkit")
 st.markdown("AI tools to evaluate ideas, reduce unnecessary meetings, and identify automation opportunities.")
+
+# ================= USER ROLE =================
+user_role = st.selectbox("Your Role", ["Operations", "Manager", "HR", "Finance", "IT"])
 
 # ================= OPENROUTER CLIENT =================
 if "OPENROUTER_API_KEY" not in st.secrets:
@@ -24,11 +28,14 @@ MODEL = "openai/gpt-4o-mini"
 if "ai_calls" not in st.session_state:
     st.session_state.ai_calls = 0
 
-MAX_CALLS = 5
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+MAX_CALLS = 8
 
 def can_use_ai():
     if st.session_state.ai_calls >= MAX_CALLS:
-        st.warning("⚠️ AI usage limit reached for this session. Please try again later.")
+        st.warning("⚠️ AI usage limit reached for this session.")
         return False
     st.session_state.ai_calls += 1
     return True
@@ -36,7 +43,8 @@ def can_use_ai():
 def ask_ai(prompt):
     response = client.chat.completions.create(
         model=MODEL,
-        messages=[{"role": "user", "content": prompt}],
+        messages=[{"role": "system", "content": f"You are a senior corporate productivity consultant helping a {user_role} improve efficiency."},
+                  {"role": "user", "content": prompt}],
         extra_headers={
             "HTTP-Referer": "https://your-app-name.streamlit.app",
             "X-Title": "Corporate Productivity Toolkit"
@@ -44,11 +52,13 @@ def ask_ai(prompt):
     )
     return response.choices[0].message.content
 
+def save_history(entry):
+    st.session_state.history.append(entry)
+
 # ================= TABS =================
-tabs = st.tabs(["💡 Idea Evaluator", "📅 Meeting Checker", "🔁 Work Automation Finder"])
+tabs = st.tabs(["💡 Idea Evaluator", "📅 Meeting Checker", "🔁 Work Automation Finder", "📊 Productivity Dashboard"])
 
-# IDEA EVALUATOR
-
+# ================= IDEA EVALUATOR =================
 with tabs[0]:
     st.header("💡 AI Idea Evaluator")
 
@@ -65,7 +75,7 @@ with tabs[0]:
     if st.button("Evaluate Idea"):
         if can_use_ai():
             prompt = f"""
-Evaluate this business idea:
+Evaluate this internal business idea and provide structured analysis.
 
 Idea: {idea_name}
 Problem: {problem}
@@ -75,18 +85,23 @@ Effort: {effort}
 Risks: {dependencies}
 
 Provide:
-1. Scores (1-10) for Impact, Clarity, Risk, Effort
-2. Overall Recommendation (GO / REWORK / NOT WORTH IT)
+1. Scores (1-10): Impact, Clarity, Risk, Effort
+2. Overall Recommendation
 3. Reasoning
 4. Two improvement suggestions
 """
             result = ask_ai(prompt)
+
             with col2:
                 st.subheader("📊 AI Evaluation")
                 st.write(result)
 
-# MEETING CHECKER
+                report = f"Idea Evaluation Report\n\n{result}"
+                st.download_button("⬇ Download Report", report, file_name="idea_evaluation.txt")
 
+                save_history({"type": "Idea", "name": idea_name, "result": result, "time": datetime.now()})
+
+# ================= MEETING CHECKER =================
 with tabs[1]:
     st.header("📅 Meeting Necessity Checker")
 
@@ -107,21 +122,22 @@ Decisions Needed: {decisions}
 Attendees: {attendees}
 Urgency: {urgency}
 
-Provide:
-1. Verdict (Meeting Needed / Send Email Instead / Reduce Scope)
-2. Suggested Duration
-3. Suggested Attendee Roles
-4. Simple Agenda
+Provide verdict, duration, roles, and agenda.
 """
             result = ask_ai(prompt)
             st.subheader("🧠 AI Meeting Verdict")
             st.write(result)
 
-#  WORK AUTOMATION FINDER
+            minutes_prompt = f"Create professional meeting minutes template for: {topic}"
+            minutes = ask_ai(minutes_prompt)
 
+            st.download_button("⬇ Download Meeting Minutes Template", minutes, file_name="meeting_minutes.txt")
+
+            save_history({"type": "Meeting", "name": topic, "result": result, "time": datetime.now()})
+
+# ================= WORK AUTOMATION FINDER =================
 with tabs[2]:
     st.header("🔁 Repetitive Work Identifier")
-    st.write("List recurring tasks you perform each week:")
 
     df = st.data_editor(pd.DataFrame({
         "Task": ["Updating weekly Excel report", "Copying data from emails"],
@@ -133,27 +149,43 @@ with tabs[2]:
         df["Monthly Hours"] = df["Hours per Week"] * 4
         total_hours = df["Monthly Hours"].sum()
 
-        st.subheader("⏳ Monthly Time Spent")
         st.bar_chart(df.set_index("Task")["Monthly Hours"])
-        st.write(f"**Total Monthly Hours on Repetitive Work: {total_hours} hrs**")
+        st.write(f"**Total Monthly Hours: {total_hours} hrs**")
+
+        if total_hours > 40:
+            st.warning("⚠️ High repetitive workload detected. Automation recommended!")
 
         if can_use_ai():
-            task_summary = df.to_string()
-
-            prompt = f"""
-These are recurring work tasks:
-
-{task_summary}
-
-Identify:
-1. Tasks suitable for automation
-2. Suggested tools (RPA, Python, Power Automate, dashboards, etc.)
-3. Automation difficulty (Easy/Medium/Hard)
-4. Potential monthly time savings
-"""
-            result = ask_ai(prompt)
+            result = ask_ai(f"Suggest automation solutions for:\n{df.to_string()}")
             st.subheader("🤖 AI Automation Opportunities")
             st.write(result)
+
+            st.info("💡 Common Tools: Power Automate | Python Scripts | RPA | Power BI Dashboards")
+
+            save_history({"type": "Automation", "name": "Work Tasks", "result": result, "time": datetime.now(), "hours": total_hours})
+
+# ================= DASHBOARD =================
+with tabs[3]:
+    st.header("📊 Productivity Insights Dashboard")
+
+    if st.session_state.history:
+        hist_df = pd.DataFrame(st.session_state.history)
+
+        st.metric("Total Evaluations", len(hist_df))
+        st.metric("Ideas Reviewed", len(hist_df[hist_df["type"] == "Idea"]))
+        st.metric("Meetings Checked", len(hist_df[hist_df["type"] == "Meeting"]))
+
+        auto_hours = hist_df[hist_df["type"] == "Automation"]["hours"].sum() if "hours" in hist_df else 0
+        st.metric("Repetitive Hours Identified", f"{auto_hours} hrs/month")
+
+        fig = go.Figure(go.Bar(
+            x=hist_df["type"].value_counts().index,
+            y=hist_df["type"].value_counts().values
+        ))
+        st.plotly_chart(fig, use_container_width=True)
+
+    else:
+        st.info("No activity yet. Start using the tools to see insights!")
 
 # ================= FOOTER =================
 st.markdown("---")
