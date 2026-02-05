@@ -7,7 +7,7 @@ from datetime import datetime
 # ================= PAGE CONFIG =================
 st.set_page_config(page_title="Productivity AI Toolkit", layout="wide")
 st.title("🚀 Productivity AI Toolkit")
-st.markdown("AI tools to evaluate ideas, reduce unnecessary meetings, and identify automation opportunities.")
+st.markdown("AI tools to identify automation opportunities, evaluate ideas, and reduce unnecessary meetings.")
 
 # ================= USER ROLE =================
 user_role = st.selectbox("Your Role", ["Operations", "Manager", "HR", "Finance", "IT"])
@@ -24,7 +24,7 @@ client = OpenAI(
 
 MODEL = "openai/gpt-4o-mini"
 
-# ============ SESSION AI LIMIT ============
+# ============ SESSION STATE ============
 if "ai_calls" not in st.session_state:
     st.session_state.ai_calls = 0
 
@@ -43,8 +43,10 @@ def can_use_ai():
 def ask_ai(prompt):
     response = client.chat.completions.create(
         model=MODEL,
-        messages=[{"role": "system", "content": f"You are a senior corporate productivity consultant helping a {user_role} improve efficiency."},
-                  {"role": "user", "content": prompt}],
+        messages=[
+            {"role": "system", "content": f"You are a corporate productivity consultant helping a {user_role} improve efficiency."},
+            {"role": "user", "content": prompt}
+        ],
         extra_headers={
             "HTTP-Referer": "https://your-app-name.streamlit.app",
             "X-Title": "Corporate Productivity Toolkit"
@@ -55,15 +57,84 @@ def ask_ai(prompt):
 def save_history(entry):
     st.session_state.history.append(entry)
 
-# ================= TABS =================
-tabs = st.tabs(["💡 Idea Evaluator", "📅 Meeting Checker","🔁 Work Automation Finder", "📊 Productivity Dashboard"])
+# ================= TABS (REORDERED) =================
+tabs = st.tabs([
+    "🔁 Work Automation Finder",
+    "💡 Idea Evaluator",
+    "📅 Meeting Checker",
+    "📊 Productivity Dashboard"
+])
 
-# ================= IDEA EVALUATOR =================
+# =====================================================
+# 🔁 WORK AUTOMATION FINDER (NOW FIRST + ROI)
+# =====================================================
 with tabs[0]:
+    st.header("🔁 Repetitive Work & Automation ROI Calculator")
+    st.write("List recurring manual tasks to discover automation and cost savings.")
+
+    df = st.data_editor(pd.DataFrame({
+        "Task": ["Updating weekly Excel report", "Copying data from emails"],
+        "Hours per Week": [4, 3],
+        "Tool Used": ["Excel", "Outlook"]
+    }), num_rows="dynamic")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        hourly_rate = st.number_input("Average Employee Hourly Cost ($)", 5, 200, 25)
+    with col2:
+        automation_cost = st.number_input("Estimated Automation Build Cost ($)", 0, 50000, 2000)
+
+    if st.button("Analyze Automation Potential"):
+        df["Monthly Hours"] = df["Hours per Week"] * 4
+        total_hours = df["Monthly Hours"].sum()
+        annual_hours = total_hours * 12
+
+        monthly_savings = total_hours * hourly_rate
+        annual_savings = annual_hours * hourly_rate
+        roi = ((annual_savings - automation_cost) / automation_cost) * 100 if automation_cost else 0
+
+        st.subheader("⏳ Time Spent on Repetitive Work")
+        st.bar_chart(df.set_index("Task")["Monthly Hours"])
+
+        st.metric("Monthly Hours Lost", f"{total_hours:.1f} hrs")
+        st.metric("Annual Hours Lost", f"{annual_hours:.1f} hrs")
+        st.metric("Potential Annual Savings", f"${annual_savings:,.0f}")
+        st.metric("Estimated ROI", f"{roi:.1f}%")
+
+        if total_hours > 40:
+            st.warning("⚠️ Significant automation opportunity detected!")
+
+        if can_use_ai():
+            result = ask_ai(f"""
+These recurring tasks were identified:
+
+{df.to_string()}
+
+Suggest:
+1. Tasks suitable for automation
+2. Tools to automate them
+3. Difficulty level
+4. Estimated % time reduction
+""")
+            st.subheader("🤖 AI Automation Plan")
+            st.write(result)
+
+            save_history({
+                "type": "Automation",
+                "name": "Task Analysis",
+                "result": result,
+                "time": datetime.now(),
+                "hours": total_hours,
+                "savings": annual_savings
+            })
+
+# =====================================================
+# 💡 IDEA EVALUATOR
+# =====================================================
+with tabs[1]:
     st.header("💡 AI Idea Evaluator")
 
     col1, col2 = st.columns(2)
-
     with col1:
         idea_name = st.text_input("Idea / Project Name")
         problem = st.text_area("Problem it solves")
@@ -75,7 +146,7 @@ with tabs[0]:
     if st.button("Evaluate Idea"):
         if can_use_ai():
             prompt = f"""
-Evaluate this internal business idea and provide structured analysis.
+Evaluate this internal idea.
 
 Idea: {idea_name}
 Problem: {problem}
@@ -83,26 +154,16 @@ Users: {users}
 Benefits: {benefits}
 Effort: {effort}
 Risks: {dependencies}
-
-Provide:
-1. Scores (1-10): Impact, Clarity, Risk, Effort
-2. Overall Recommendation
-3. Reasoning
-4. Two improvement suggestions
 """
             result = ask_ai(prompt)
-
             with col2:
-                st.subheader("📊 AI Evaluation")
                 st.write(result)
-
-                report = f"Idea Evaluation Report\n\n{result}"
-                st.download_button("⬇ Download Report", report, file_name="idea_evaluation.txt")
-
                 save_history({"type": "Idea", "name": idea_name, "result": result, "time": datetime.now()})
 
-# ================= MEETING CHECKER =================
-with tabs[1]:
+# =====================================================
+# 📅 MEETING CHECKER
+# =====================================================
+with tabs[2]:
     st.header("📅 Meeting Necessity Checker")
 
     topic = st.text_input("Meeting Topic")
@@ -121,52 +182,16 @@ Objective: {objective}
 Decisions Needed: {decisions}
 Attendees: {attendees}
 Urgency: {urgency}
-
-Provide verdict, duration, roles, and agenda.
 """
             result = ask_ai(prompt)
-            st.subheader("🧠 AI Meeting Verdict")
             st.write(result)
-
-            minutes_prompt = f"Create professional meeting minutes template for: {topic}"
-            minutes = ask_ai(minutes_prompt)
-
-            st.download_button("⬇ Download Meeting Minutes Template", minutes, file_name="meeting_minutes.txt")
-
             save_history({"type": "Meeting", "name": topic, "result": result, "time": datetime.now()})
 
-# ================= WORK AUTOMATION FINDER =================
-with tabs[2]:
-    st.header("🔁 Repetitive Work Identifier")
-
-    df = st.data_editor(pd.DataFrame({
-        "Task": ["Updating weekly Excel report", "Copying data from emails"],
-        "Hours per Week": [4, 3],
-        "Tool Used": ["Excel", "Outlook"]
-    }), num_rows="dynamic")
-
-    if st.button("Analyze Workload"):
-        df["Monthly Hours"] = df["Hours per Week"] * 4
-        total_hours = df["Monthly Hours"].sum()
-
-        st.bar_chart(df.set_index("Task")["Monthly Hours"])
-        st.write(f"**Total Monthly Hours: {total_hours} hrs**")
-
-        if total_hours > 40:
-            st.warning("⚠️ High repetitive workload detected. Automation recommended!")
-
-        if can_use_ai():
-            result = ask_ai(f"Suggest automation solutions for:\n{df.to_string()}")
-            st.subheader("🤖 AI Automation Opportunities")
-            st.write(result)
-
-            st.info("💡 Common Tools: Power Automate | Python Scripts | RPA | Power BI Dashboards")
-
-            save_history({"type": "Automation", "name": "Work Tasks", "result": result, "time": datetime.now(), "hours": total_hours})
-
-# ================= DASHBOARD =================
+# =====================================================
+# 📊 DASHBOARD (NOW SHOWS SAVINGS)
+# =====================================================
 with tabs[3]:
-    st.header("📊 Productivity Insights Dashboard")
+    st.header("📊 Productivity Impact Dashboard")
 
     if st.session_state.history:
         hist_df = pd.DataFrame(st.session_state.history)
@@ -175,8 +200,11 @@ with tabs[3]:
         st.metric("Ideas Reviewed", len(hist_df[hist_df["type"] == "Idea"]))
         st.metric("Meetings Checked", len(hist_df[hist_df["type"] == "Meeting"]))
 
-        auto_hours = hist_df[hist_df["type"] == "Automation"]["hours"].sum() if "hours" in hist_df else 0
-        st.metric("Repetitive Hours Identified", f"{auto_hours} hrs/month")
+        auto_hours = hist_df[hist_df["type"] == "Automation"]["hours"].sum()
+        auto_savings = hist_df[hist_df["type"] == "Automation"]["savings"].sum()
+
+        st.metric("Repetitive Hours Identified", f"{auto_hours:.1f} hrs/month")
+        st.metric("Total Annual Savings Identified", f"${auto_savings:,.0f}")
 
         fig = go.Figure(go.Bar(
             x=hist_df["type"].value_counts().index,
@@ -185,10 +213,8 @@ with tabs[3]:
         st.plotly_chart(fig, use_container_width=True)
 
     else:
-        st.info("No activity yet. Start using the tools to see insights!")
+        st.info("No activity yet. Run an analysis to see productivity insights!")
 
 # ================= FOOTER =================
 st.markdown("---")
 st.caption("Powered by Digitalization@Intimates | MAS Productivity AI Toolkit")
-
-
